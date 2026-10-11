@@ -2,6 +2,7 @@
 import base64
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -25,13 +26,19 @@ class Account:
         self.username, self.key, self.slug = username, key, slug
         self.kernel = f"{username}/{slug}"
         self.cfg = tempfile.mkdtemp(prefix="kg_")
-        with open(os.path.join(self.cfg, "kaggle.json"), "w") as f:
-            json.dump({"username": username, "key": key}, f)
-        os.chmod(os.path.join(self.cfg, "kaggle.json"), 0o600)
+        # Legacy keys (from kaggle.json) are 32 hex chars; anything else is a new-style API token.
+        self.legacy = bool(re.fullmatch(r"[0-9a-fA-F]{32}", key))
+        if self.legacy:
+            with open(os.path.join(self.cfg, "kaggle.json"), "w") as f:
+                json.dump({"username": username, "key": key}, f)
+            os.chmod(os.path.join(self.cfg, "kaggle.json"), 0o600)
 
     def _run(self, args, timeout=600):
         env = {k: v for k, v in os.environ.items() if not k.startswith("KAGGLE_")}
         env["KAGGLE_CONFIG_DIR"] = self.cfg
+        env["HOME"] = self.cfg  # ignore any ~/.kaggle files on the runner
+        if not self.legacy:
+            env["KAGGLE_API_TOKEN"] = self.key
         r = subprocess.run(["kaggle", *args], capture_output=True, text=True, env=env, timeout=timeout)
         return r.returncode, (r.stdout or "") + (r.stderr or "")
 

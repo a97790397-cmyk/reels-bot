@@ -18,6 +18,8 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
 
       - uses: actions/setup-python@v5
         with:
@@ -49,6 +51,9 @@ jobs:
           git add state/state.enc 2>/dev/null || true
           if ! git diff --cached --quiet; then
             git commit -q -m "state update"
-            git pull -q --rebase origin "${GITHUB_REF_NAME}" || true
-            git push -q
+            for i in 1 2 3; do
+              git push -q origin HEAD:main && break
+              git fetch -q origin main
+              git rebase -q -X theirs origin/main || { git rebase --abort; git reset -q --soft origin/main; git commit -q -m "state update"; }
+            done
           fi

@@ -1,0 +1,3 @@
+Tajawal-Bold.ttf - Copyright The Tajawal Project Authors.
+Licensed under the SIL Open Font License, Version 1.1 (https://openfontlicense.org).
+Source: https://github.com/google/fonts/tree/main/ofl/tajawal

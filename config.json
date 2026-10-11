@@ -1,0 +1,26 @@
+{
+  "brand_name": "ReelsArabi",
+  "bot_username": "ReelsArabiBot",
+
+  "wallet_address": "0x83989519b771a2343340fC7BC3b38dEcf9f97974",
+  "payment_network": "BEP20 (BNB Smart Chain)",
+  "payment_token": "USDT",
+
+  "lengths": {
+    "15": {"scenes": 3, "price": 19.99},
+    "20": {"scenes": 4, "price": 24.99},
+    "30": {"scenes": 6, "price": 29.99}
+  },
+
+  "first_order_free": true,
+  "max_revisions": 2,
+  "payment_window_hours": 72,
+
+  "kaggle": {
+    "kernel_slug": "reels-gen",
+    "accelerator": "NvidiaTeslaT4",
+    "max_clips_per_run": 30,
+    "inference_steps": 25,
+    "run_timeout_hours": 9
+  }
+}

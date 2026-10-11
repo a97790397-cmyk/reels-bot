@@ -30,6 +30,8 @@ subprocess.run(
      "bitsandbytes>=0.45.0", "ftfy", "imageio", "imageio-ffmpeg", "sentencepiece"],
     check=False,
 )
+# Kaggle ships an older torchao that breaks the new diffusers import; diffusers works fine without it.
+subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", "-q", "torchao"], check=False)
 
 import torch  # noqa: E402
 
@@ -129,9 +131,10 @@ def make_plans(jobs):
         )
         for job in need:
             msgs = [{"role": "system", "content": PLAN_SYSTEM}, {"role": "user", "content": plan_prompt(job)}]
-            ids = tok.apply_chat_template(msgs, add_generation_prompt=True, return_tensors="pt").to(model.device)
-            out = model.generate(ids, max_new_tokens=900, do_sample=True, temperature=0.8, top_p=0.9)
-            text = tok.decode(out[0][ids.shape[1]:], skip_special_tokens=True)
+            prompt_text = tok.apply_chat_template(msgs, add_generation_prompt=True, tokenize=False)
+            enc = tok(prompt_text, return_tensors="pt").to(model.device)
+            out = model.generate(**enc, max_new_tokens=900, do_sample=True, temperature=0.8, top_p=0.9)
+            text = tok.decode(out[0][enc["input_ids"].shape[1]:], skip_special_tokens=True)
             job["plan"] = parse_plan(text, job)
             log("planned", job["job_id"])
         del model

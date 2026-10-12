@@ -36,8 +36,11 @@ subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", "-q", "torchao"]
 import torch  # noqa: E402
 
 GPU_OK = torch.cuda.is_available()
-log("cuda:", GPU_OK, torch.cuda.get_device_name(0) if GPU_OK else "-")
-DTYPE = torch.bfloat16 if (GPU_OK and torch.cuda.is_bf16_supported()) else torch.float16
+log("cuda:", GPU_OK, torch.cuda.get_device_name(0) if GPU_OK else "-", "gpus:", torch.cuda.device_count())
+# T4/P100 (compute < 8.0) have no native bfloat16: PyTorch then falls back to plain attention that needs
+# ~48 GB. float16 keeps the memory-efficient attention kernel, so we use it on those cards.
+NATIVE_BF16 = GPU_OK and torch.cuda.get_device_capability(0)[0] >= 8
+DTYPE = torch.bfloat16 if NATIVE_BF16 else torch.float16
 
 
 def free_memory():
@@ -161,17 +164,33 @@ def load_video_pipe():
     return pipe
 
 
+# (height, width, frames): tried in order; a smaller size is used only if the GPU runs out of memory
+SIZES = [(832, 480, 81), (672, 384, 81), (576, 320, 65)]
+SIZE_IDX = 0
+
+
 def render_clip(pipe, prompt, path, seed):
+    global SIZE_IDX
     from diffusers.utils import export_to_video
-    g = torch.Generator("cpu").manual_seed(seed)
-    frames = pipe(
-        prompt=prompt + ", vertical 9:16 composition, high detail, smooth motion",
-        negative_prompt=NEGATIVE,
-        height=832, width=480, num_frames=81,
-        num_inference_steps=int(SETTINGS.get("steps", 25)),
-        guidance_scale=5.0, generator=g,
-    ).frames[0]
-    export_to_video(frames, path, fps=16)
+    while True:
+        h, w, n = SIZES[SIZE_IDX]
+        try:
+            g = torch.Generator("cpu").manual_seed(seed)
+            frames = pipe(
+                prompt=prompt + ", vertical 9:16 composition, high detail, smooth motion",
+                negative_prompt=NEGATIVE,
+                height=h, width=w, num_frames=n,
+                num_inference_steps=int(SETTINGS.get("steps", 25)),
+                guidance_scale=5.0, generator=g,
+            ).frames[0]
+            export_to_video(frames, path, fps=16)
+            return
+        except torch.cuda.OutOfMemoryError:
+            free_memory()
+            if SIZE_IDX + 1 >= len(SIZES):
+                raise
+            SIZE_IDX += 1
+            log("out of GPU memory, retrying smaller:", SIZES[SIZE_IDX])
 
 
 def main():
